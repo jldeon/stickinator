@@ -74,5 +74,5 @@ tests/              pytest suite
 
 ## Status
 
-Milestone 1: project scaffold only. The window is a shell; image operations
-arrive in later milestones.
+Milestone 2: core image document, file I/O and undo. The window is still a
+shell; the preview and operation buttons arrive in milestone 3.
