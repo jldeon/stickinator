@@ -1,20 +1,14 @@
-"""Application wiring: QApplication, main window, and the GUI entry point."""
+"""Application wiring: QApplication and the GUI entry point."""
 
 from __future__ import annotations
 
 import sys
 from collections.abc import Sequence
 
-from PySide6.QtWidgets import QApplication, QMainWindow
+from PySide6.QtWidgets import QApplication
 
-from stickinator import __version__
-
-APP_NAME = "Stickinator"
-ORG_NAME = "Stickinator"
-ORG_DOMAIN = "stickinator.app"
-
-WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 800
+from stickinator import APP_NAME, ORG_DOMAIN, ORG_NAME, __version__
+from stickinator.ui.main_window import MainWindow
 
 
 def create_application(argv: Sequence[str] | None = None) -> QApplication:
@@ -33,16 +27,9 @@ def create_application(argv: Sequence[str] | None = None) -> QApplication:
     return app
 
 
-def create_main_window() -> QMainWindow:
-    """Build the top-level window.
-
-    Milestone 1 ships an empty shell; the preview and button column arrive in
-    milestone 3.
-    """
-    window = QMainWindow()
-    window.setWindowTitle(APP_NAME)
-    window.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
-    return window
+def create_main_window() -> MainWindow:
+    """Build the top-level window."""
+    return MainWindow()
 
 
 def main(argv: Sequence[str] | None = None) -> int:

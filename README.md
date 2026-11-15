@@ -72,7 +72,17 @@ scripts/            bootstrap and build scripts
 tests/              pytest suite
 ```
 
+## Usage
+
+- **Open**: the Open button, ⌘O, or drag a PNG/JPEG/WEBP onto the window.
+- **Undo**: ⌘Z, multi-level, with no redo.
+- **Save**: ⌘S. The first save suggests `<name>_sticker.png`. Save As (⌘⇧S)
+  always asks. Saving never silently overwrites the file you opened.
+- Closing, quitting, or opening another file with unsaved changes asks whether
+  to Save, Discard or Cancel.
+
 ## Status
 
-Milestone 2: core image document, file I/O and undo. The window is still a
-shell; the preview and operation buttons arrive in milestone 3.
+Milestone 3: open, save, undo, drag-and-drop and the unsaved-changes guard.
+The preview shows the image with a checkerboard behind transparency. The
+operation buttons are present but disabled until their milestones land.
