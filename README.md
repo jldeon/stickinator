@@ -32,9 +32,12 @@ make run
 ```sh
 make test
 make lint
+make smoke
 ```
 
-Tests run with `QT_QPA_PLATFORM=offscreen`, so no window server is needed.
+Tests and the smoke check run with `QT_QPA_PLATFORM=offscreen`, so no window
+server or visible window is needed. Use `make smoke` rather than `make run` when
+verifying that the app still starts.
 
 ## Build
 

@@ -1,6 +1,6 @@
 UV ?= uv
 
-.PHONY: setup lock run test lint build clean
+.PHONY: setup lock run test smoke lint build clean
 
 setup:
 	./scripts/bootstrap.sh
@@ -13,6 +13,9 @@ run:
 
 test:
 	QT_QPA_PLATFORM=offscreen $(UV) run pytest
+
+smoke:
+	QT_QPA_PLATFORM=offscreen $(UV) run python scripts/smoke_gui.py
 
 lint:
 	$(UV) run ruff check .
