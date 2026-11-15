@@ -34,9 +34,8 @@ def test_runs_an_operation_and_returns_pixels(worker: OperationWorker, qtbot: Qt
         worker.start(FILL, FakeParams(value=42, color=(0, 200, 0)), _image())
 
     result = blocker.args[0]
-    assert isinstance(result, np.ndarray)
-    assert result[0, 0, 0] == 42
-    assert result[0, 0, 1] == 200
+    assert result.image[0, 0, 0] == 42
+    assert result.image[0, 0, 1] == 200
     assert not worker.running
 
 

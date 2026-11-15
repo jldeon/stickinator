@@ -83,9 +83,11 @@ tests/              pytest suite
   always asks. Saving never silently overwrites the file you opened.
 - Closing, quitting, or opening another file with unsaved changes asks whether
   to Save, Discard or Cancel.
+- **Operations**: Extend Canvas, Trim and Resize / Print Size. Each opens a
+  dialog pre-filled with the last values used; runs happen in a child process
+  with a Cancel button, and every result is undoable.
 
 ## Status
 
-Milestone 4: operation framework. Operation parameters are versioned JSON in
-`QSettings` and persist across restarts; long-running work runs in a child
-process and Cancel terminates it. The operations themselves arrive next.
+Milestone 5: Extend Canvas, Trim and Resize / Print Size are wired end to end.
+Background removal and Border arrive in the next milestones.

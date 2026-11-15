@@ -50,13 +50,28 @@ class Params:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationContext:
+    """Document facts an operation may need but must not mutate."""
+
+    dpi: tuple[float, float] = (300.0, 300.0)
+
+
+@dataclass(frozen=True, slots=True)
+class OperationResult:
+    """New pixels, plus a resolution change when the operation has one."""
+
+    image: RGBAImage
+    dpi: tuple[float, float] | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Operation[P: Params]:
     """A named image operation plus the parameters it expects."""
 
     key: str
     label: str
     params_type: type[P]
-    run: Callable[[RGBAImage, P, CancelToken], RGBAImage]
+    run: Callable[[RGBAImage, P, OperationContext, CancelToken], OperationResult]
 
 
 def defaults_of[P: Params](params_type: type[P]) -> P:

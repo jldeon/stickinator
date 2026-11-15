@@ -17,6 +17,7 @@ from PySide6.QtCore import QObject, QTimer, Signal, Slot
 from stickinator.core.ops.base import (
     Operation,
     OperationCancelled,
+    OperationContext,
     Params,
     RGBAImage,
 )
@@ -45,13 +46,14 @@ def _child_main(
     operation: Operation[Any],
     params: Params,
     image: RGBAImage,
+    context: OperationContext,
     cancel_event: Any,
     connection: Connection,
 ) -> None:
     token = ProcessCancelToken(cancel_event)
     try:
         token.raise_if_cancelled()
-        result = operation.run(image, params, token)
+        result = operation.run(image, params, context, token)
     except OperationCancelled:
         connection.send(("cancelled", None))
     except Exception as exc:
@@ -95,18 +97,27 @@ class OperationWorker(QObject):
         operation: Operation[Any],
         params: Params,
         image: RGBAImage,
+        context: OperationContext | None = None,
     ) -> None:
         """Run ``operation`` in a fresh process. Raises if one is already running."""
         if self.running:
             msg = "an operation is already running"
             raise RuntimeError(msg)
 
-        context = mp.get_context("spawn")
-        parent_connection, child_connection = context.Pipe(duplex=False)
-        cancel_event = context.Event()
-        process = context.Process(
+        active_context = context if context is not None else OperationContext()
+        context_process = mp.get_context("spawn")
+        parent_connection, child_connection = context_process.Pipe(duplex=False)
+        cancel_event = context_process.Event()
+        process = context_process.Process(
             target=_child_main,
-            args=(operation, params, image, cancel_event, child_connection),
+            args=(
+                operation,
+                params,
+                image,
+                active_context,
+                cancel_event,
+                child_connection,
+            ),
             daemon=True,
         )
         process.start()

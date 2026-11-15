@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QMessageBox,
     QVBoxLayout,
@@ -12,6 +14,23 @@ from PySide6.QtWidgets import (
 )
 
 from stickinator.core.ops.base import Params
+
+
+def spin_box(
+    minimum: float = 0.0,
+    maximum: float = 100_000.0,
+    decimals: int = 2,
+) -> QDoubleSpinBox:
+    box = QDoubleSpinBox()
+    box.setRange(minimum, maximum)
+    box.setDecimals(decimals)
+    return box
+
+
+def select_data(combo: QComboBox, value: object) -> None:
+    index = combo.findData(value)
+    if index >= 0:
+        combo.setCurrentIndex(index)
 
 
 class ParamsDialog[P: Params](QDialog):

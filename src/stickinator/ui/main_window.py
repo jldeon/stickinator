@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from enum import Enum, auto
+from functools import partial
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QMimeData, QSize, Qt
 from PySide6.QtGui import (
@@ -15,11 +17,13 @@ from PySide6.QtGui import (
     QKeySequence,
 )
 from PySide6.QtWidgets import (
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -28,8 +32,23 @@ from PySide6.QtWidgets import (
 from stickinator import APP_NAME
 from stickinator.core.image_doc import Document
 from stickinator.core.io import ImageLoadError, ImageSaveError, RGBAImage, save_png
+from stickinator.core.ops.base import (
+    Operation,
+    OperationContext,
+    OperationResult,
+    Params,
+)
+from stickinator.core.ops.extend_canvas import EXTEND_CANVAS
+from stickinator.core.ops.resize import RESIZE_OPERATION
+from stickinator.core.ops.trim import TRIM
 from stickinator.core.settings import Settings
+from stickinator.ui.dialogs.base import ParamsDialog
+from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
+from stickinator.ui.dialogs.resize import ResizeDialog
+from stickinator.ui.dialogs.trim import TrimDialog
 from stickinator.ui.preview_widget import PreviewWidget
+from stickinator.ui.settings_store import ParamsStore
+from stickinator.ui.worker import OperationWorker
 
 WINDOW_SIZE = QSize(1200, 800)
 BUTTON_MINIMUM_HEIGHT = 32
@@ -46,6 +65,14 @@ OPERATION_BUTTONS = (
     ("Trim", "trimButton"),
     ("Resize / Print Size", "resizeButton"),
 )
+
+# Buttons wired to a real operation. The rest stay disabled until their
+# milestone adds an entry here.
+OPERATION_TARGETS: dict[str, tuple[Operation[Any], type[ParamsDialog[Any]]]] = {
+    "extendCanvasButton": (EXTEND_CANVAS, ExtendCanvasDialog),
+    "trimButton": (TRIM, TrimDialog),
+    "resizeButton": (RESIZE_OPERATION, ResizeDialog),
+}
 
 
 class UnsavedChoice(Enum):
@@ -64,12 +91,21 @@ class MainWindow(QMainWindow):
         parent: QWidget | None = None,
         *,
         settings: Settings | None = None,
+        params_store: ParamsStore | None = None,
     ) -> None:
         super().__init__(parent)
         self._settings = settings or Settings()
+        self._params_store = params_store if params_store is not None else ParamsStore()
         self._document: Document | None = None
         self._save_path: Path | None = None
         self._original_source: Path | None = None
+        self._busy = False
+        self._progress: QProgressDialog | None = None
+
+        self._worker = OperationWorker(self)
+        self._worker.finished.connect(self._on_operation_finished)
+        self._worker.failed.connect(self._on_operation_failed)
+        self._worker.cancelled.connect(self._on_operation_cancelled)
 
         self.setWindowTitle(APP_NAME)
         self.resize(WINDOW_SIZE)
@@ -84,6 +120,14 @@ class MainWindow(QMainWindow):
     @property
     def document(self) -> Document | None:
         return self._document
+
+    @property
+    def busy(self) -> bool:
+        return self._busy
+
+    @property
+    def worker(self) -> OperationWorker:
+        return self._worker
 
     # --------------------------------------------------------------------- ui
 
@@ -115,8 +159,9 @@ class MainWindow(QMainWindow):
 
         button_column.addWidget(self._open_button)
         button_column.addSpacing(8)
-        for button in self._operation_buttons:
-            # Wired up in the milestones that implement each operation.
+        for (_, name), button in zip(OPERATION_BUTTONS, self._operation_buttons, strict=True):
+            if name in OPERATION_TARGETS:
+                button.clicked.connect(partial(self.open_operation, name))
             button_column.addWidget(button)
         button_column.addStretch(1)
         button_column.addWidget(self._undo_button)
@@ -173,15 +218,18 @@ class MainWindow(QMainWindow):
         document = self._document
         has_document = document is not None
         can_undo = document is not None and document.can_undo
+        idle = not self._busy
 
+        self._open_button.setEnabled(idle)
+        self._open_action.setEnabled(idle)
         for widget in (self._save_button, self._save_action, self._save_as_action):
-            widget.setEnabled(has_document)
-        self._undo_button.setEnabled(can_undo)
-        self._undo_action.setEnabled(can_undo)
+            widget.setEnabled(has_document and idle)
+        self._undo_button.setEnabled(can_undo and idle)
+        self._undo_action.setEnabled(can_undo and idle)
 
-        # Operation buttons stay disabled until the milestone that wires them.
-        for button in self._operation_buttons:
-            button.setEnabled(False)
+        for (_, name), button in zip(OPERATION_BUTTONS, self._operation_buttons, strict=True):
+            wired = name in OPERATION_TARGETS
+            button.setEnabled(has_document and idle and wired)
 
     def _refresh(self) -> None:
         document = self._document
@@ -261,6 +309,86 @@ class MainWindow(QMainWindow):
             return False
         self._refresh()
         return True
+
+    # --------------------------------------------------------------- operations
+
+    def open_operation(self, button_name: str) -> None:
+        """Show the dialog for a wired operation button, then run it."""
+        target = OPERATION_TARGETS.get(button_name)
+        if target is None or self._document is None or self._busy:
+            return
+
+        operation, dialog_type = target
+        defaults = operation.params_type()
+        stored = self._params_store.load(operation.key, defaults)
+        dialog = dialog_type(operation.label, stored, defaults, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        params = dialog.accepted_params()
+        if params is None:
+            return
+        self._params_store.save(operation.key, params)
+        self.start_operation(operation, params)
+
+    def start_operation(self, operation: Operation[Any], params: Params) -> bool:
+        """Run an operation in the worker against the current document."""
+        document = self._document
+        if document is None or self._busy:
+            return False
+
+        try:
+            self._worker.start(
+                operation,
+                params,
+                document.image,
+                OperationContext(dpi=document.dpi),
+            )
+        except (RuntimeError, OSError) as exc:
+            self._show_error("Could not start the operation", str(exc))
+            return False
+
+        self._busy = True
+        self._show_progress(operation.label)
+        self._update_actions()
+        return True
+
+    def _on_operation_finished(self, result: OperationResult) -> None:
+        self._finish_operation()
+        document = self._document
+        if document is not None:
+            document.apply(result.image, dpi=result.dpi)
+        self._refresh()
+
+    def _on_operation_failed(self, message: str) -> None:
+        self._finish_operation()
+        self._show_error("Could not finish the operation", message)
+        self._refresh()
+
+    def _on_operation_cancelled(self) -> None:
+        self._finish_operation()
+        self._refresh()
+
+    def _finish_operation(self) -> None:
+        self._busy = False
+        self._hide_progress()
+
+    def _show_progress(self, label: str) -> None:
+        progress = QProgressDialog(f"{label}…", "Cancel", 0, 0, self)
+        progress.setWindowTitle(APP_NAME)
+        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.canceled.connect(self._worker.cancel)
+        progress.show()
+        self._progress = progress
+
+    def _hide_progress(self) -> None:
+        progress = self._progress
+        self._progress = None
+        if progress is not None:
+            progress.reset()
+            progress.close()
 
     def _write(self, path: Path) -> bool:
         document = self._document
@@ -377,6 +505,10 @@ class MainWindow(QMainWindow):
         self.load_path(path)
 
     def closeEvent(self, event: QCloseEvent) -> None:
+        if self._busy:
+            self._worker.shutdown()
+            self._finish_operation()
+
         if self._maybe_discard_changes():
             event.accept()
         else:
