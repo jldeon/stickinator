@@ -6,13 +6,14 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+from PySide6.QtCore import QMimeData, QPointF, QSettings, Qt, QUrl
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import QLabel, QPushButton
 from pytestqt.qtbot import QtBot
 
 from stickinator.core.io import load_image, save_png
 from stickinator.ui.main_window import MainWindow, UnsavedChoice
+from stickinator.ui.settings_store import AppSettingsStore
 
 OPERATION_BUTTONS = (
     "bgAlgorithmicButton",
@@ -38,8 +39,9 @@ def _button(window: MainWindow, name: str) -> QPushButton:
 
 
 @pytest.fixture
-def window(qtbot: QtBot) -> MainWindow:
-    main_window = MainWindow()
+def window(qtbot: QtBot, tmp_path: Path) -> MainWindow:
+    store = AppSettingsStore(QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
+    main_window = MainWindow(app_store=store)
     # A dirty document left behind by a test must not open a real prompt during
     # pytest-qt's teardown, where monkeypatched dialogs are already gone.
     qtbot.addWidget(main_window, before_close_func=_mark_clean)

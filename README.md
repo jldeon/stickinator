@@ -33,6 +33,7 @@ make run
 make test
 make lint
 make smoke
+make test-network   # downloads rembg models; not run in CI
 ```
 
 Tests and the smoke check run with `QT_QPA_PLATFORM=offscreen`, so no window
@@ -88,8 +89,11 @@ tests/              pytest suite
   in a child process with a Cancel button, and every result is undoable.
 - **Remove BG** has a colour-key mode (auto edge colour or eyedropper, ΔE76
   tolerance, contiguous or global) and a GrabCut mode.
+- **Remove BG (AI)** offers local rembg (offline), a generic HTTP endpoint and
+  OpenAI-compatible `/v1/images/edits`, with an optional alpha binarise step.
 
 ## Status
 
-Milestone 7: algorithmic background removal is wired end to end, with the
-preview eyedropper. AI background removal and the Settings dialog come next.
+Milestone 8: AI background removal is wired end to end for local rembg,
+generic HTTP endpoints and OpenAI-compatible edits. Settings (⌘,) covers
+providers, keychain keys and general defaults. Packaging comes next.

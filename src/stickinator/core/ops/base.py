@@ -13,6 +13,9 @@ from typing import Protocol
 import numpy as np
 from numpy.typing import NDArray
 
+from stickinator.core.ai.config import AiContext
+from stickinator.core.params import Params
+
 RGBAImage = NDArray[np.uint8]
 
 
@@ -41,19 +44,11 @@ class NeverCancelled:
 
 
 @dataclass(frozen=True, slots=True)
-class Params:
-    """Base class for per-operation parameters.
-
-    Subclasses must be frozen dataclasses whose fields are bool, int, float,
-    str, or tuples of numbers.
-    """
-
-
-@dataclass(frozen=True, slots=True)
 class OperationContext:
     """Document facts an operation may need but must not mutate."""
 
     dpi: tuple[float, float] = (300.0, 300.0)
+    ai: AiContext | None = None
 
 
 @dataclass(frozen=True, slots=True)

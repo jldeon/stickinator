@@ -6,15 +6,18 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QPushButton
 from pytestqt.qtbot import QtBot
 from tests.helpers.fake_ops import FAIL, STUBBORN, FakeParams
 
+from stickinator.core.ai.config import OPENAI, AiSettings
 from stickinator.core.io import save_png
 from stickinator.core.ops.bg_algorithmic import BG_REMOVAL, BgRemovalParams
 from stickinator.core.ops.border import BORDER, BorderParams
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS, ExtendCanvasParams
 from stickinator.ui.main_window import MainWindow
+from stickinator.ui.settings_store import AppSettingsStore
 
 TIMEOUT_MS = 30_000
 
@@ -38,8 +41,9 @@ def _mark_clean(window: MainWindow) -> None:
 
 
 @pytest.fixture
-def window(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch) -> MainWindow:
-    main_window = MainWindow()
+def window(qtbot: QtBot, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> MainWindow:
+    store = AppSettingsStore(QSettings(str(tmp_path / "settings.ini"), QSettings.Format.IniFormat))
+    main_window = MainWindow(app_store=store)
     qtbot.addWidget(main_window, before_close_func=_mark_clean)
     monkeypatch.setattr(main_window, "_show_progress", lambda label: None)
     monkeypatch.setattr(main_window, "_hide_progress", lambda: None)
@@ -60,7 +64,7 @@ def test_wired_buttons_enable_after_loading(window: MainWindow, source_file: Pat
     assert _button(window, "trimButton").isEnabled()
     assert _button(window, "resizeButton").isEnabled()
     assert _button(window, "bgAlgorithmicButton").isEnabled()
-    assert not _button(window, "bgAiButton").isEnabled()
+    assert _button(window, "bgAiButton").isEnabled()
 
 
 def test_extend_canvas_runs_and_can_be_undone(
@@ -169,3 +173,19 @@ def test_background_removal_runs_end_to_end(
     assert document is not None
     assert document.image[0, 0, 3] == 0
     assert document.image[50, 50, 3] == 255
+
+
+def test_ai_context_reads_settings_and_keychain(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    window._app_store.save_ai(
+        AiSettings(provider=OPENAI, openai_base_url="https://x/v1", timeout=33.0)
+    )
+    monkeypatch.setattr("stickinator.ui.main_window.get_api_key", lambda provider: "secret")
+
+    context = window.ai_context()
+
+    assert context.provider == OPENAI
+    assert context.api_key == "secret"
+    assert context.timeout == 33.0
+    assert context.openai.base_url == "https://x/v1"

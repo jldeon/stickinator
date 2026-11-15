@@ -30,6 +30,8 @@ from PySide6.QtWidgets import (
 )
 
 from stickinator import APP_NAME
+from stickinator.core.ai.config import AiContext
+from stickinator.core.ai.secrets import get_api_key
 from stickinator.core.image_doc import Document
 from stickinator.core.io import ImageLoadError, ImageSaveError, RGBAImage, save_png
 from stickinator.core.ops.base import (
@@ -38,6 +40,7 @@ from stickinator.core.ops.base import (
     OperationResult,
     Params,
 )
+from stickinator.core.ops.bg_ai import BG_AI
 from stickinator.core.ops.bg_algorithmic import BG_REMOVAL
 from stickinator.core.ops.border import BORDER
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS
@@ -45,13 +48,15 @@ from stickinator.core.ops.resize import RESIZE_OPERATION
 from stickinator.core.ops.trim import TRIM
 from stickinator.core.settings import Settings
 from stickinator.ui.dialogs.base import ParamsDialog
+from stickinator.ui.dialogs.bg_ai import BgAiDialog
 from stickinator.ui.dialogs.bg_algorithmic import ChromaKeyDialog, Sample
 from stickinator.ui.dialogs.border import BorderDialog
 from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
 from stickinator.ui.dialogs.resize import ResizeDialog
+from stickinator.ui.dialogs.settings_dialog import SettingsDialog
 from stickinator.ui.dialogs.trim import TrimDialog
 from stickinator.ui.preview_widget import PreviewWidget
-from stickinator.ui.settings_store import ParamsStore
+from stickinator.ui.settings_store import AppSettingsStore, ParamsStore
 from stickinator.ui.worker import OperationWorker
 
 WINDOW_SIZE = QSize(1200, 800)
@@ -73,6 +78,7 @@ OPERATION_BUTTONS = (
 # Buttons wired to a real operation. The rest stay disabled until their
 # milestone adds an entry here.
 OPERATION_TARGETS: dict[str, tuple[Operation[Any], type[ParamsDialog[Any]]]] = {
+    "bgAiButton": (BG_AI, BgAiDialog),
     "bgAlgorithmicButton": (BG_REMOVAL, ChromaKeyDialog),
     "extendCanvasButton": (EXTEND_CANVAS, ExtendCanvasDialog),
     "borderButton": (BORDER, BorderDialog),
@@ -98,9 +104,11 @@ class MainWindow(QMainWindow):
         *,
         settings: Settings | None = None,
         params_store: ParamsStore | None = None,
+        app_store: AppSettingsStore | None = None,
     ) -> None:
         super().__init__(parent)
-        self._settings = settings or Settings()
+        self._app_store = app_store if app_store is not None else AppSettingsStore()
+        self._settings = settings if settings is not None else self._app_store.load_general()
         self._params_store = params_store if params_store is not None else ParamsStore()
         self._document: Document | None = None
         self._save_path: Path | None = None
@@ -208,6 +216,12 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self._save_as_action)
 
         file_menu.addSeparator()
+        settings_action = QAction("Settings…", self)
+        settings_action.setShortcut(QKeySequence.StandardKey.Preferences)
+        settings_action.setMenuRole(QAction.MenuRole.PreferencesRole)
+        settings_action.triggered.connect(self.open_settings)
+        file_menu.addAction(settings_action)
+
         quit_action = QAction("Quit", self)
         quit_action.setShortcut(QKeySequence.StandardKey.Quit)
         quit_action.setMenuRole(QAction.MenuRole.QuitRole)
@@ -372,12 +386,13 @@ class MainWindow(QMainWindow):
         if document is None or self._busy:
             return False
 
+        ai = self.ai_context() if operation.key == BG_AI.key else None
         try:
             self._worker.start(
                 operation,
                 params,
                 document.image,
-                OperationContext(dpi=document.dpi),
+                OperationContext(dpi=document.dpi, ai=ai),
             )
         except (RuntimeError, OSError) as exc:
             self._show_error("Could not start the operation", str(exc))
@@ -387,6 +402,20 @@ class MainWindow(QMainWindow):
         self._show_progress(operation.label)
         self._update_actions()
         return True
+
+    def ai_context(self) -> AiContext:
+        ai = self._app_store.load_ai()
+        return ai.to_context(get_api_key(ai.provider))
+
+    def open_settings(self) -> None:
+        dialog = SettingsDialog(self._app_store, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        self._settings = self._app_store.load_general()
+        document = self._document
+        if document is not None:
+            document.undo_memory_limit_bytes = self._settings.undo_memory_limit_bytes
 
     def _on_operation_finished(self, result: OperationResult) -> None:
         self._finish_operation()

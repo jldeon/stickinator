@@ -8,10 +8,18 @@ from typing import Any, TypeVar
 
 from PySide6.QtCore import QSettings
 
+from stickinator.core.ai.config import AiSettings
 from stickinator.core.ops.base import Params
+from stickinator.core.settings import (
+    DEFAULT_DPI,
+    DEFAULT_UNDO_MEMORY_LIMIT_BYTES,
+    Settings,
+)
 
 PARAMS_VERSION = 1
 PARAMS_GROUP = "operations"
+GENERAL_GROUP = "general"
+AI_SETTINGS_KEY = "ai.settings"
 
 P = TypeVar("P", bound=Params)
 
@@ -95,3 +103,60 @@ def _coerce(expected: Any, value: Any) -> Any:
             raise ValueError(msg)
         return value
     return value
+
+
+class AppSettingsStore:
+    """General application settings plus the flat AI settings block."""
+
+    def __init__(self, settings: QSettings | None = None) -> None:
+        self._settings = settings if settings is not None else QSettings()
+        self._params = ParamsStore(self._settings)
+
+    def load_general(self) -> Settings:
+        dpi = _read_float(self._settings.value(f"{GENERAL_GROUP}/default_dpi"), DEFAULT_DPI)
+        limit = _read_int(
+            self._settings.value(f"{GENERAL_GROUP}/undo_memory_limit_bytes"),
+            DEFAULT_UNDO_MEMORY_LIMIT_BYTES,
+        )
+        try:
+            return Settings(default_dpi=dpi, undo_memory_limit_bytes=limit)
+        except ValueError:
+            return Settings()
+
+    def save_general(self, settings: Settings) -> None:
+        self._settings.setValue(f"{GENERAL_GROUP}/default_dpi", settings.default_dpi)
+        self._settings.setValue(
+            f"{GENERAL_GROUP}/undo_memory_limit_bytes",
+            settings.undo_memory_limit_bytes,
+        )
+        self._settings.sync()
+
+    def load_ai(self) -> AiSettings:
+        return self._params.load(AI_SETTINGS_KEY, AiSettings())
+
+    def save_ai(self, settings: AiSettings) -> None:
+        self._params.save(AI_SETTINGS_KEY, settings)
+
+
+def _read_float(raw: object, fallback: float) -> float:
+    if isinstance(raw, bool) or not isinstance(raw, int | float | str):
+        return fallback
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _read_int(raw: object, fallback: int) -> int:
+    if isinstance(raw, bool):
+        return fallback
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw)
+    if isinstance(raw, str):
+        try:
+            return int(raw)
+        except ValueError:
+            return fallback
+    return fallback

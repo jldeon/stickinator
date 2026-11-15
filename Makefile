@@ -1,6 +1,6 @@
 UV ?= uv
 
-.PHONY: setup lock run test smoke lint build clean
+.PHONY: setup lock run test test-network smoke lint build clean
 
 setup:
 	./scripts/bootstrap.sh
@@ -12,7 +12,10 @@ run:
 	$(UV) run stickinator
 
 test:
-	QT_QPA_PLATFORM=offscreen $(UV) run pytest
+	QT_QPA_PLATFORM=offscreen $(UV) run pytest -m "not network"
+
+test-network:
+	QT_QPA_PLATFORM=offscreen $(UV) run pytest -m network
 
 smoke:
 	QT_QPA_PLATFORM=offscreen $(UV) run python scripts/smoke_gui.py

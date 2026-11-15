@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 from pytestqt.qtbot import QtBot
 
+from stickinator.core.ops.bg_ai import BgAiParams
 from stickinator.core.ops.bg_algorithmic import (
     GLOBAL,
     GRABCUT,
@@ -27,6 +28,7 @@ from stickinator.core.ops.extend_canvas import (
 )
 from stickinator.core.ops.resize import DPI_ONLY, ResizeParams
 from stickinator.core.ops.trim import TrimParams
+from stickinator.ui.dialogs.bg_ai import BgAiDialog
 from stickinator.ui.dialogs.bg_algorithmic import ChromaKeyDialog
 from stickinator.ui.dialogs.border import BorderDialog
 from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
@@ -275,3 +277,18 @@ def test_background_dialog_reset_restores_defaults(qtbot: QtBot) -> None:
     dialog.reset()
 
     assert dialog.params() == BgRemovalParams()
+
+
+def test_ai_dialog_round_trips_and_toggles_binarize(qtbot: QtBot) -> None:
+    params = BgAiParams(provider="openai", binarize=True, threshold=90)
+    dialog = BgAiDialog("Remove BG (AI)", params, BgAiParams())
+    qtbot.addWidget(dialog)
+
+    assert dialog.params() == params
+
+    binarize = _child(dialog, QCheckBox, "binarizeCheck")
+    threshold = _child(dialog, QSpinBox, "thresholdSpin")
+    assert threshold.isEnabled()
+
+    binarize.setChecked(False)
+    assert not threshold.isEnabled()
