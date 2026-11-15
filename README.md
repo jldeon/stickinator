@@ -86,6 +86,6 @@ tests/              pytest suite
 
 ## Status
 
-Milestone 3: open, save, undo, drag-and-drop and the unsaved-changes guard.
-The preview shows the image with a checkerboard behind transparency. The
-operation buttons are present but disabled until their milestones land.
+Milestone 4: operation framework. Operation parameters are versioned JSON in
+`QSettings` and persist across restarts; long-running work runs in a child
+process and Cancel terminates it. The operations themselves arrive next.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import sys
 from collections.abc import Sequence
 
@@ -34,6 +35,9 @@ def create_main_window() -> MainWindow:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the GUI. Returns the process exit code."""
+    # Required for the spawned worker processes in a frozen bundle.
+    multiprocessing.freeze_support()
+
     app = create_application(argv)
     window = create_main_window()
     window.show()
