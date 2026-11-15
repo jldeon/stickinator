@@ -34,9 +34,22 @@ def create_main_window() -> MainWindow:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the GUI. Returns the process exit code."""
+    """Run the GUI, or the headless self-test. Returns the process exit code."""
     # Required for the spawned worker processes in a frozen bundle.
     multiprocessing.freeze_support()
+
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if "--self-test" in arguments:
+        from pathlib import Path
+
+        from stickinator.diagnostics import run_self_test
+
+        report_path = None
+        if "--self-test-out" in arguments:
+            index = arguments.index("--self-test-out")
+            if index + 1 < len(arguments):
+                report_path = Path(arguments[index + 1])
+        return run_self_test(use_ai="--ai" in arguments, report_path=report_path)
 
     app = create_application(argv)
     window = create_main_window()

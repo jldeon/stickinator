@@ -67,6 +67,17 @@ endpoint, and an OpenAI-compatible `/v1/images/edits` endpoint.
 - Because the app is unsigned, macOS may ask for Keychain access again after
   each rebuild. That is expected.
 
+## Troubleshooting a build
+
+The packaged app has a headless self-test:
+
+```sh
+dist/Stickinator.app/Contents/MacOS/Stickinator --self-test --self-test-out /tmp/report.txt
+dist/Stickinator.app/Contents/MacOS/Stickinator --self-test --ai --self-test-out /tmp/report-ai.txt
+```
+
+`--ai` runs one local rembg inference, downloading the model on first use.
+
 ## Project layout
 
 ```
@@ -94,6 +105,5 @@ tests/              pytest suite
 
 ## Status
 
-Milestone 8: AI background removal is wired end to end for local rembg,
-generic HTTP endpoints and OpenAI-compatible edits. Settings (⌘,) covers
-providers, keychain keys and general defaults. Packaging comes next.
+Milestone 9: the unsigned `.app` and `.dmg` build cleanly, and the bundled app
+passes its self-test including a local rembg inference. Final polish remains.

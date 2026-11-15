@@ -33,6 +33,26 @@ Two consequences: alpha matting can ship in v1, and the CoreML option is viable.
 The frozen bundle is about 390 MB, mostly onnxruntime, PySide6 and the model
 runtime; trim it in milestone 9 if needed.
 
+## Verifying a build
+
+The bundle can prove itself without opening a window:
+
+```sh
+dist/Stickinator.app/Contents/MacOS/Stickinator --self-test --self-test-out /tmp/report.txt
+dist/Stickinator.app/Contents/MacOS/Stickinator --self-test --ai --self-test-out /tmp/report-ai.txt
+```
+
+`--ai` runs one local rembg inference and downloads the model on first use.
+A milestone 9 build (macOS 26.6.2, arm64) reported:
+
+- frozen bundle, Python 3.12.16
+- PySide6 6.12.0, numpy 2.5.4, OpenCV 4.14.0, Pillow 13.0.0
+- rembg 2.0.87, onnxruntime 1.32.0, pymatting 1.1.16
+- execution providers: CoreML, Azure, CPU
+- local rembg cutout: corner alpha 0, centre alpha 255
+
+Sizes: about 496 MB for the `.app` and 203 MB for the `.dmg`.
+
 ## What the spec encodes
 
 - `collect_all` for `rembg`, `pymatting`, `onnxruntime`, `numba` and `llvmlite`,
