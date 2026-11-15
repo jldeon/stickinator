@@ -38,11 +38,13 @@ from stickinator.core.ops.base import (
     OperationResult,
     Params,
 )
+from stickinator.core.ops.border import BORDER
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS
 from stickinator.core.ops.resize import RESIZE_OPERATION
 from stickinator.core.ops.trim import TRIM
 from stickinator.core.settings import Settings
 from stickinator.ui.dialogs.base import ParamsDialog
+from stickinator.ui.dialogs.border import BorderDialog
 from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
 from stickinator.ui.dialogs.resize import ResizeDialog
 from stickinator.ui.dialogs.trim import TrimDialog
@@ -70,6 +72,7 @@ OPERATION_BUTTONS = (
 # milestone adds an entry here.
 OPERATION_TARGETS: dict[str, tuple[Operation[Any], type[ParamsDialog[Any]]]] = {
     "extendCanvasButton": (EXTEND_CANVAS, ExtendCanvasDialog),
+    "borderButton": (BORDER, BorderDialog),
     "trimButton": (TRIM, TrimDialog),
     "resizeButton": (RESIZE_OPERATION, ResizeDialog),
 }

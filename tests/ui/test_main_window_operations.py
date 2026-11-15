@@ -11,6 +11,7 @@ from pytestqt.qtbot import QtBot
 from tests.helpers.fake_ops import FAIL, STUBBORN, FakeParams
 
 from stickinator.core.io import save_png
+from stickinator.core.ops.border import BORDER, BorderParams
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS, ExtendCanvasParams
 from stickinator.ui.main_window import MainWindow
 
@@ -57,7 +58,6 @@ def test_wired_buttons_enable_after_loading(window: MainWindow, source_file: Pat
     assert _button(window, "extendCanvasButton").isEnabled()
     assert _button(window, "trimButton").isEnabled()
     assert _button(window, "resizeButton").isEnabled()
-    assert not _button(window, "borderButton").isEnabled()
     assert not _button(window, "bgAlgorithmicButton").isEnabled()
     assert not _button(window, "bgAiButton").isEnabled()
 
@@ -127,3 +127,25 @@ def test_buttons_are_disabled_while_busy(
 
     window.worker.cancel()
     qtbot.waitUntil(lambda: not window.busy, timeout=TIMEOUT_MS)
+
+
+def test_border_runs_and_expands_the_canvas(
+    window: MainWindow, source_file: Path, qtbot: QtBot
+) -> None:
+    window.load_path(source_file)
+
+    params = BorderParams(
+        width=6,
+        outer_outline_only=False,
+        merge_pieces=False,
+        smooth=False,
+        auto_extend=True,
+        solid_alpha=True,
+    )
+    assert window.start_operation(BORDER, params)
+    qtbot.waitUntil(lambda: not window.busy, timeout=TIMEOUT_MS)
+
+    document = window.document
+    assert document is not None
+    assert document.image.shape[0] > 150
+    assert set(np.unique(document.image[..., 3]).tolist()) <= {0, 255}

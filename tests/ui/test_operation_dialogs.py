@@ -4,18 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSpinBox, QWidget
 from pytestqt.qtbot import QtBot
 
+from stickinator.core.ops.border import HULL, BorderParams
 from stickinator.core.ops.extend_canvas import (
     PER_SIDE,
     ExtendCanvasParams,
 )
 from stickinator.core.ops.resize import DPI_ONLY, ResizeParams
 from stickinator.core.ops.trim import TrimParams
+from stickinator.ui.dialogs.border import BorderDialog
 from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
 from stickinator.ui.dialogs.resize import ResizeDialog
 from stickinator.ui.dialogs.trim import TrimDialog
+from stickinator.ui.dialogs.widgets import ColorButton
 
 
 def _child(dialog: QWidget, kind: type[Any], name: str) -> Any:
@@ -132,3 +135,67 @@ def test_trim_spin_boxes_are_wired(qtbot: QtBot) -> None:
     margin.setValue(7)
 
     assert dialog.params() == TrimParams(threshold=10, margin=7)
+
+
+def test_border_dialog_round_trips_all_fields(qtbot: QtBot) -> None:
+    params = BorderParams(
+        width=0.25,
+        unit="inches",
+        color=(12, 34, 56),
+        alpha_threshold=64,
+        outer_outline_only=False,
+        merge_pieces=True,
+        merge_method=HULL,
+        merge_radius=5,
+        smooth=False,
+        smoothing=3,
+        solid_alpha=False,
+        auto_extend=False,
+    )
+    dialog = BorderDialog("Border", params, BorderParams())
+    qtbot.addWidget(dialog)
+
+    assert dialog.params() == params
+
+
+def test_border_dialog_reset_restores_defaults(qtbot: QtBot) -> None:
+    dialog = BorderDialog(
+        "Border",
+        BorderParams(width=40, color=(0, 0, 0), smooth=False),
+        BorderParams(),
+    )
+    qtbot.addWidget(dialog)
+
+    dialog.reset()
+
+    assert dialog.params() == BorderParams()
+
+
+def test_border_dialog_disables_merge_controls_when_off(qtbot: QtBot) -> None:
+    params = BorderParams(merge_pieces=False)
+    dialog = BorderDialog("Border", params, BorderParams())
+    qtbot.addWidget(dialog)
+    radius = _child(dialog, QDoubleSpinBox, "radiusSpin")
+    method = _child(dialog, QComboBox, "mergeMethodCombo")
+
+    assert not method.isEnabled()
+    assert not radius.isEnabled()
+
+    merge = _child(dialog, QCheckBox, "mergeCheck")
+    merge.setChecked(True)
+    assert method.isEnabled()
+    assert radius.isEnabled()
+
+    method.setCurrentIndex(method.findData(HULL))
+    assert not radius.isEnabled()
+    assert dialog.params().merge_method == HULL
+
+
+def test_border_dialog_uses_the_colour_button(qtbot: QtBot) -> None:
+    dialog = BorderDialog("Border", BorderParams(), BorderParams())
+    qtbot.addWidget(dialog)
+    button = _child(dialog, ColorButton, "colorButton")
+
+    button.set_color((1, 2, 3))
+
+    assert dialog.params().color == (1, 2, 3)
