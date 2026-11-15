@@ -13,6 +13,7 @@ from tests.helpers.fake_ops import FAIL, STUBBORN, FakeParams
 
 from stickinator.core.ai.config import OPENAI, AiSettings
 from stickinator.core.io import save_png
+from stickinator.core.ops.bg_ai import BG_AI, BgAiParams
 from stickinator.core.ops.bg_algorithmic import BG_REMOVAL, BgRemovalParams
 from stickinator.core.ops.border import BORDER, BorderParams
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS, ExtendCanvasParams
@@ -91,7 +92,11 @@ def test_failure_is_reported_and_pixels_stay_unchanged(
 ) -> None:
     window.load_path(source_file)
     errors: list[str] = []
-    monkeypatch.setattr(window, "_show_error", lambda title, message: errors.append(message))
+    monkeypatch.setattr(
+        window,
+        "_show_error",
+        lambda title, message, details=None: errors.append(message),
+    )
 
     assert window.start_operation(FAIL, FakeParams())
     qtbot.waitUntil(lambda: not window.busy, timeout=TIMEOUT_MS)
@@ -189,3 +194,12 @@ def test_ai_context_reads_settings_and_keychain(
     assert context.api_key == "secret"
     assert context.timeout == 33.0
     assert context.openai.base_url == "https://x/v1"
+
+
+def test_default_params_follow_the_settings_provider(window: MainWindow) -> None:
+    window._app_store.save_ai(AiSettings(provider=OPENAI))
+
+    defaults = window.default_params(BG_AI)
+
+    assert isinstance(defaults, BgAiParams)
+    assert defaults.provider == OPENAI

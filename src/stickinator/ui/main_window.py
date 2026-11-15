@@ -40,7 +40,7 @@ from stickinator.core.ops.base import (
     OperationResult,
     Params,
 )
-from stickinator.core.ops.bg_ai import BG_AI
+from stickinator.core.ops.bg_ai import BG_AI, BgAiParams
 from stickinator.core.ops.bg_algorithmic import BG_REMOVAL
 from stickinator.core.ops.border import BORDER
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS
@@ -215,6 +215,11 @@ class MainWindow(QMainWindow):
         self._save_as_action.triggered.connect(self.save_as)
         file_menu.addAction(self._save_as_action)
 
+        close_action = QAction("Close", self)
+        close_action.setShortcut(QKeySequence.StandardKey.Close)
+        close_action.triggered.connect(self.close)
+        file_menu.addAction(close_action)
+
         file_menu.addSeparator()
         settings_action = QAction("Settings…", self)
         settings_action.setShortcut(QKeySequence.StandardKey.Preferences)
@@ -332,6 +337,12 @@ class MainWindow(QMainWindow):
 
     # --------------------------------------------------------------- operations
 
+    def default_params(self, operation: Operation[Any]) -> Params:
+        """First-run values: AI dialogs follow the default provider in Settings."""
+        if operation.key == BG_AI.key:
+            return BgAiParams(provider=self._app_store.load_ai().provider)
+        return operation.params_type()
+
     def open_operation(self, button_name: str) -> None:
         """Show the dialog for a wired operation button, then run it."""
         target = OPERATION_TARGETS.get(button_name)
@@ -339,7 +350,7 @@ class MainWindow(QMainWindow):
             return
 
         operation, dialog_type = target
-        defaults = operation.params_type()
+        defaults = self.default_params(operation)
         stored = self._params_store.load(operation.key, defaults)
         dialog = dialog_type(operation.label, stored, defaults, self)
         if isinstance(dialog, ChromaKeyDialog):
@@ -426,7 +437,8 @@ class MainWindow(QMainWindow):
 
     def _on_operation_failed(self, message: str) -> None:
         self._finish_operation()
-        self._show_error("Could not finish the operation", message)
+        summary, _, details = message.partition("\n\n")
+        self._show_error("Could not finish the operation", summary, details or None)
         self._refresh()
 
     def _on_operation_cancelled(self) -> None:
@@ -534,8 +546,14 @@ class MainWindow(QMainWindow):
         )
         return answer == QMessageBox.StandardButton.Yes
 
-    def _show_error(self, title: str, message: str) -> None:
-        QMessageBox.critical(self, title, message)
+    def _show_error(self, title: str, message: str, details: str | None = None) -> None:
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.setWindowTitle(title)
+        box.setText(message)
+        if details:
+            box.setDetailedText(details)
+        box.exec()
 
     def _maybe_discard_changes(self) -> bool:
         document = self._document

@@ -102,7 +102,9 @@ def test_load_failure_is_reported_and_changes_nothing(
     broken.write_text("not an image")
     errors: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        window, "_show_error", lambda title, message: errors.append((title, message))
+        window,
+        "_show_error",
+        lambda title, message, details=None: errors.append((title, message)),
     )
 
     assert not window.load_path(broken)
