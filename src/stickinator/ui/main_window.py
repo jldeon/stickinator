@@ -6,9 +6,9 @@ from collections.abc import Callable
 from enum import Enum, auto
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from PySide6.QtCore import QMimeData, QSize, Qt
+from PySide6.QtCore import QEventLoop, QMimeData, QSize, Qt
 from PySide6.QtGui import (
     QAction,
     QCloseEvent,
@@ -38,12 +38,14 @@ from stickinator.core.ops.base import (
     OperationResult,
     Params,
 )
+from stickinator.core.ops.bg_algorithmic import BG_REMOVAL
 from stickinator.core.ops.border import BORDER
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS
 from stickinator.core.ops.resize import RESIZE_OPERATION
 from stickinator.core.ops.trim import TRIM
 from stickinator.core.settings import Settings
 from stickinator.ui.dialogs.base import ParamsDialog
+from stickinator.ui.dialogs.bg_algorithmic import ChromaKeyDialog, Sample
 from stickinator.ui.dialogs.border import BorderDialog
 from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
 from stickinator.ui.dialogs.resize import ResizeDialog
@@ -71,6 +73,7 @@ OPERATION_BUTTONS = (
 # Buttons wired to a real operation. The rest stay disabled until their
 # milestone adds an entry here.
 OPERATION_TARGETS: dict[str, tuple[Operation[Any], type[ParamsDialog[Any]]]] = {
+    "bgAlgorithmicButton": (BG_REMOVAL, ChromaKeyDialog),
     "extendCanvasButton": (EXTEND_CANVAS, ExtendCanvasDialog),
     "borderButton": (BORDER, BorderDialog),
     "trimButton": (TRIM, TrimDialog),
@@ -325,6 +328,9 @@ class MainWindow(QMainWindow):
         defaults = operation.params_type()
         stored = self._params_store.load(operation.key, defaults)
         dialog = dialog_type(operation.label, stored, defaults, self)
+        if isinstance(dialog, ChromaKeyDialog):
+            dialog.set_colour_picker(lambda: self._pick_colour(dialog))
+
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -333,6 +339,32 @@ class MainWindow(QMainWindow):
             return
         self._params_store.save(operation.key, params)
         self.start_operation(operation, params)
+
+    def _pick_colour(self, dialog: ChromaKeyDialog) -> Sample | None:
+        """Hide the dialog, let the user click the preview, then restore it."""
+        if self._document is None:
+            return None
+
+        dialog.hide()
+        self._preview.begin_pick()
+        loop = QEventLoop()
+        result: dict[str, Sample] = {}
+
+        def on_picked(x: int, y: int, colour: object) -> None:
+            result["value"] = (cast("tuple[int, int, int]", colour), (x, y))
+            loop.quit()
+
+        def on_cancelled() -> None:
+            loop.quit()
+
+        self._preview.picked.connect(on_picked)
+        self._preview.pick_cancelled.connect(on_cancelled)
+        loop.exec()
+        self._preview.picked.disconnect(on_picked)
+        self._preview.pick_cancelled.disconnect(on_cancelled)
+        self._preview.end_pick()
+        dialog.show()
+        return result.get("value")
 
     def start_operation(self, operation: Operation[Any], params: Params) -> bool:
         """Run an operation in the worker against the current document."""

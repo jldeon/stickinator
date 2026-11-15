@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import numpy as np
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtTest import QTest
 from pytestqt.qtbot import QtBot
 
 from stickinator.ui.preview_widget import PreviewWidget, to_qimage
@@ -63,3 +65,58 @@ def test_paints_without_an_image(qtbot: QtBot) -> None:
     pixmap = widget.grab()
 
     assert not pixmap.isNull()
+
+
+def test_eyedropper_maps_widget_to_image_pixels(qtbot: QtBot) -> None:
+    widget = PreviewWidget()
+    qtbot.addWidget(widget)
+    widget.resize(400, 400)
+    image = _image(100, 50)
+    image[25, 50] = (7, 8, 9, 255)
+    widget.set_image(image)
+    widget.begin_pick()
+
+    with qtbot.waitSignal(widget.picked, timeout=1000) as blocker:
+        QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(200, 200))
+
+    assert blocker.args[:2] == [50, 25]
+    assert blocker.args[2] == (7, 8, 9)
+    assert not widget.picking
+
+
+def test_eyedropper_ignores_clicks_outside_the_image(qtbot: QtBot) -> None:
+    widget = PreviewWidget()
+    qtbot.addWidget(widget)
+    widget.resize(400, 400)
+    widget.set_image(_image(100, 50))
+    widget.begin_pick()
+
+    QTest.mouseClick(widget, Qt.MouseButton.LeftButton, pos=QPoint(10, 10))
+
+    assert widget.picking
+
+
+def test_right_click_cancels_the_eyedropper(qtbot: QtBot) -> None:
+    widget = PreviewWidget()
+    qtbot.addWidget(widget)
+    widget.resize(400, 400)
+    widget.set_image(_image(100, 50))
+    widget.begin_pick()
+
+    with qtbot.waitSignal(widget.pick_cancelled, timeout=1000):
+        QTest.mouseClick(widget, Qt.MouseButton.RightButton, pos=QPoint(200, 200))
+
+    assert not widget.picking
+
+
+def test_escape_cancels_the_eyedropper(qtbot: QtBot) -> None:
+    widget = PreviewWidget()
+    qtbot.addWidget(widget)
+    widget.resize(400, 400)
+    widget.set_image(_image(100, 50))
+    widget.begin_pick()
+
+    with qtbot.waitSignal(widget.pick_cancelled, timeout=1000):
+        QTest.keyClick(widget, Qt.Key.Key_Escape)
+
+    assert not widget.picking

@@ -11,6 +11,7 @@ from pytestqt.qtbot import QtBot
 from tests.helpers.fake_ops import FAIL, STUBBORN, FakeParams
 
 from stickinator.core.io import save_png
+from stickinator.core.ops.bg_algorithmic import BG_REMOVAL, BgRemovalParams
 from stickinator.core.ops.border import BORDER, BorderParams
 from stickinator.core.ops.extend_canvas import EXTEND_CANVAS, ExtendCanvasParams
 from stickinator.ui.main_window import MainWindow
@@ -58,7 +59,7 @@ def test_wired_buttons_enable_after_loading(window: MainWindow, source_file: Pat
     assert _button(window, "extendCanvasButton").isEnabled()
     assert _button(window, "trimButton").isEnabled()
     assert _button(window, "resizeButton").isEnabled()
-    assert not _button(window, "bgAlgorithmicButton").isEnabled()
+    assert _button(window, "bgAlgorithmicButton").isEnabled()
     assert not _button(window, "bgAiButton").isEnabled()
 
 
@@ -149,3 +150,22 @@ def test_border_runs_and_expands_the_canvas(
     assert document is not None
     assert document.image.shape[0] > 150
     assert set(np.unique(document.image[..., 3]).tolist()) <= {0, 255}
+
+
+def test_background_removal_runs_end_to_end(
+    window: MainWindow, tmp_path: Path, qtbot: QtBot
+) -> None:
+    image = np.zeros((100, 100, 4), dtype=np.uint8)
+    image[...] = (240, 240, 240, 255)
+    image[30:70, 30:70] = (200, 40, 40, 255)
+    source = tmp_path / "subject.png"
+    save_png(source, image, 300)
+    window.load_path(source)
+
+    assert window.start_operation(BG_REMOVAL, BgRemovalParams(tolerance=10.0))
+    qtbot.waitUntil(lambda: not window.busy, timeout=TIMEOUT_MS)
+
+    document = window.document
+    assert document is not None
+    assert document.image[0, 0, 3] == 0
+    assert document.image[50, 50, 3] == 255

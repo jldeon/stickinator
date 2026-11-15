@@ -83,12 +83,13 @@ tests/              pytest suite
   always asks. Saving never silently overwrites the file you opened.
 - Closing, quitting, or opening another file with unsaved changes asks whether
   to Save, Discard or Cancel.
-- **Operations**: Extend Canvas, Border, Trim and Resize / Print Size. Each
-  opens a dialog pre-filled with the last values used; runs happen in a child
-  process with a Cancel button, and every result is undoable.
+- **Operations**: Remove BG, Extend Canvas, Border, Trim and Resize / Print
+  Size. Each opens a dialog pre-filled with the last values used; runs happen
+  in a child process with a Cancel button, and every result is undoable.
+- **Remove BG** has a colour-key mode (auto edge colour or eyedropper, ΔE76
+  tolerance, contiguous or global) and a GrabCut mode.
 
 ## Status
 
-Milestone 6: Border is wired end to end, including hole filling, piece
-merging, smoothing, solid alpha and auto-extended canvas. Background removal
-comes next.
+Milestone 7: algorithmic background removal is wired end to end, with the
+preview eyedropper. AI background removal and the Settings dialog come next.

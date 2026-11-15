@@ -4,9 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSpinBox, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QPushButton,
+    QSpinBox,
+    QWidget,
+)
 from pytestqt.qtbot import QtBot
 
+from stickinator.core.ops.bg_algorithmic import (
+    GLOBAL,
+    GRABCUT,
+    PICKED,
+    BgRemovalParams,
+)
 from stickinator.core.ops.border import HULL, BorderParams
 from stickinator.core.ops.extend_canvas import (
     PER_SIDE,
@@ -14,6 +27,7 @@ from stickinator.core.ops.extend_canvas import (
 )
 from stickinator.core.ops.resize import DPI_ONLY, ResizeParams
 from stickinator.core.ops.trim import TrimParams
+from stickinator.ui.dialogs.bg_algorithmic import ChromaKeyDialog
 from stickinator.ui.dialogs.border import BorderDialog
 from stickinator.ui.dialogs.extend_canvas import ExtendCanvasDialog
 from stickinator.ui.dialogs.resize import ResizeDialog
@@ -199,3 +213,65 @@ def test_border_dialog_uses_the_colour_button(qtbot: QtBot) -> None:
     button.set_color((1, 2, 3))
 
     assert dialog.params().color == (1, 2, 3)
+
+
+def test_background_dialog_round_trips_all_fields(qtbot: QtBot) -> None:
+    params = BgRemovalParams(
+        method=GRABCUT,
+        color_source=PICKED,
+        color=(1, 2, 3),
+        tolerance=12.5,
+        mode=GLOBAL,
+        seed_x=3,
+        seed_y=4,
+        feather=2.5,
+        despeckle=30,
+        inset=10,
+        inset_unit="px",
+        iterations=7,
+    )
+    dialog = ChromaKeyDialog("Remove BG", params, BgRemovalParams())
+    qtbot.addWidget(dialog)
+
+    assert dialog.params() == params
+
+
+def test_background_dialog_switches_between_methods(qtbot: QtBot) -> None:
+    dialog = ChromaKeyDialog("Remove BG", BgRemovalParams(), BgRemovalParams())
+    qtbot.addWidget(dialog)
+    tolerance = _child(dialog, QDoubleSpinBox, "toleranceSpin")
+    inset = _child(dialog, QDoubleSpinBox, "insetSpin")
+    assert dialog._form.isRowVisible(tolerance)
+    assert not dialog._form.isRowVisible(inset)
+
+    method = _child(dialog, QComboBox, "methodCombo")
+    method.setCurrentIndex(method.findData(GRABCUT))
+
+    assert not dialog._form.isRowVisible(tolerance)
+    assert dialog._form.isRowVisible(inset)
+
+
+def test_background_dialog_picker_sets_colour_seed_and_source(qtbot: QtBot) -> None:
+    dialog = ChromaKeyDialog("Remove BG", BgRemovalParams(), BgRemovalParams())
+    qtbot.addWidget(dialog)
+    dialog.set_colour_picker(lambda: ((9, 8, 7), (11, 12)))
+
+    _child(dialog, QPushButton, "pickButton").click()
+
+    params = dialog.params()
+    assert params.color == (9, 8, 7)
+    assert (params.seed_x, params.seed_y) == (11, 12)
+    assert params.color_source == PICKED
+
+
+def test_background_dialog_reset_restores_defaults(qtbot: QtBot) -> None:
+    dialog = ChromaKeyDialog(
+        "Remove BG",
+        BgRemovalParams(tolerance=50, seed_x=1, seed_y=2, color=(0, 0, 0)),
+        BgRemovalParams(),
+    )
+    qtbot.addWidget(dialog)
+
+    dialog.reset()
+
+    assert dialog.params() == BgRemovalParams()
