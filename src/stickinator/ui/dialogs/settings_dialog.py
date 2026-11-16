@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -32,6 +33,7 @@ from stickinator.core.settings import Settings
 from stickinator.ui.settings_store import AppSettingsStore
 
 MEGABYTE = 1024 * 1024
+PANEL_MIN_WIDTH = 380
 
 
 class SettingsDialog(QDialog):
@@ -66,7 +68,7 @@ class SettingsDialog(QDialog):
 
     def _build_ai_tab(self) -> QWidget:
         tab = QWidget(self)
-        layout = QVBoxLayout(tab)
+        columns = QHBoxLayout(tab)
 
         behaviour = QGroupBox("Default provider")
         behaviour_form = QFormLayout(behaviour)
@@ -169,25 +171,42 @@ class SettingsDialog(QDialog):
         openai_form.addRow("Prompt", self._openai_prompt)
         openai_form.addRow("API key", self._openai_key)
 
-        layout.addWidget(behaviour)
-        layout.addWidget(local)
-        layout.addWidget(remote)
-        layout.addWidget(openai)
-        layout.addStretch(1)
+        # Two columns keep the dialog within the height of a laptop screen:
+        # local settings on the left, remote providers on the right. Equal
+        # minimum widths keep the two columns balanced when the dialog grows.
+        for panel in (behaviour, local, remote, openai):
+            panel.setMinimumWidth(PANEL_MIN_WIDTH)
+
+        left = QVBoxLayout()
+        left.addWidget(behaviour)
+        left.addWidget(local)
+        left.addStretch(1)
+
+        right = QVBoxLayout()
+        right.addWidget(remote)
+        right.addWidget(openai)
+        right.addStretch(1)
+
+        columns.addLayout(left, 1)
+        columns.addLayout(right, 1)
         return tab
 
     def _build_general_tab(self) -> QWidget:
         tab = QWidget(self)
         form = QFormLayout(tab)
+        # The AI tab makes the dialog wide; keep the few general fields compact.
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.FieldsStayAtSizeHint)
 
         self._default_dpi = _double_spin(1.0, 5000.0)
         self._default_dpi.setSuffix(" dpi")
         self._default_dpi.setValue(self._general.default_dpi)
+        self._default_dpi.setMinimumWidth(180)
         self._default_dpi.setObjectName("defaultDpiSpin")
 
         self._undo_megabytes = _int_spin(0, 100_000)
         self._undo_megabytes.setSuffix(" MB")
         self._undo_megabytes.setValue(self._general.undo_memory_limit_bytes // MEGABYTE)
+        self._undo_megabytes.setMinimumWidth(180)
         self._undo_megabytes.setObjectName("undoLimitSpin")
 
         form.addRow("Default DPI", self._default_dpi)

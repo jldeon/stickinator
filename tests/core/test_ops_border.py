@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import cv2
@@ -38,6 +39,14 @@ def _row_width(image: np.ndarray, row: int) -> int:
 def _components(image: np.ndarray) -> int:
     count, _ = cv2.connectedComponents((image[..., 3] > 0).astype(np.uint8))
     return count - 1
+
+
+def _transparent_pockets(image: np.ndarray) -> int:
+    """Transparent pixels not connected to the outside of the canvas."""
+    transparent = (image[..., 3] == 0).astype(np.uint8)
+    _, labels = cv2.connectedComponents(transparent)
+    outside = int(labels[0, 0])
+    return int(((transparent == 1) & (labels != outside)).sum())
 
 
 def test_border_width_is_accurate() -> None:
@@ -197,6 +206,101 @@ def test_hull_merge_bridges_diagonal_pieces() -> None:
 
     assert result.image[45, 45, 3] == 255
     assert _components(result.image) == 1
+
+
+def test_outer_outline_fills_a_pocket_sealed_by_growth() -> None:
+    image = np.zeros((120, 120, 4), dtype=np.uint8)
+    image[0:90, 10:110] = (10, 20, 30, 255)
+    image[0:12, 52:68] = 0  # 16 px mouth on the old top edge
+    image[12:70, 30:90] = 0  # wider chamber behind it
+
+    result = run(
+        image,
+        BorderParams(width=8, color=(255, 0, 0)),
+        CONTEXT,
+        NeverCancelled(),
+    )
+
+    # The grown band roofs the mouth, so the chamber is now an interior hole.
+    assert _transparent_pockets(result.image) == 0
+    top = (result.image.shape[0] - image.shape[0]) // 2
+    left = (result.image.shape[1] - image.shape[1]) // 2
+    assert tuple(result.image[top + 40, left + 60]) == (255, 0, 0, 255)
+
+
+def test_growth_sealed_pocket_stays_transparent_without_outer_outline() -> None:
+    image = np.zeros((120, 120, 4), dtype=np.uint8)
+    image[0:90, 10:110] = (10, 20, 30, 255)
+    image[0:12, 52:68] = 0
+    image[12:70, 30:90] = 0
+
+    result = run(
+        image,
+        BorderParams(width=8, outer_outline_only=False),
+        CONTEXT,
+        NeverCancelled(),
+    )
+
+    assert _transparent_pockets(result.image) > 0
+
+
+def test_merge_close_does_not_smear_along_the_canvas_edge() -> None:
+    image = np.zeros((70, 70, 4), dtype=np.uint8)
+    image[0:30, 10:40] = (10, 20, 30, 255)
+    image[0:30, 46:60] = (10, 20, 30, 255)
+
+    result = run(
+        image,
+        BorderParams(
+            width=1,
+            merge_pieces=True,
+            merge_method=CLOSE,
+            merge_radius=20,
+            smooth=False,
+            auto_extend=False,
+            solid_alpha=True,
+        ),
+        CONTEXT,
+        NeverCancelled(),
+    )
+
+    # The two pieces are closed into one, but the close must not spread them
+    # across the whole canvas edge (OpenCV treats the outside as foreground
+    # for its erode pass).
+    assert result.image[0, 0, 3] == 0
+    assert result.image[0, -1, 3] == 0
+    assert result.image[0, 35, 3] == 255
+
+
+@pytest.mark.parametrize("radius", [3, 20])
+def test_auto_extend_matches_extending_the_canvas_first(radius: int) -> None:
+    image = np.zeros((70, 70, 4), dtype=np.uint8)
+    image[0:30, 10:40] = (10, 20, 30, 255)
+    image[0:30, 46:60] = (10, 20, 30, 255)
+    params = BorderParams(
+        width=8,
+        merge_pieces=True,
+        merge_radius=radius,
+        outer_outline_only=True,
+        auto_extend=True,
+        color=(255, 0, 0),
+    )
+
+    direct = run(image, params, CONTEXT, NeverCancelled()).image
+
+    margin = (direct.shape[0] - image.shape[0]) // 2
+    extra = margin + radius + 4
+    padded = np.zeros((image.shape[0] + 2 * extra, image.shape[1] + 2 * extra, 4), dtype=np.uint8)
+    padded[extra : extra + image.shape[0], extra : extra + image.shape[1]] = image
+    reference = run(padded, replace(params, auto_extend=False), CONTEXT, NeverCancelled()).image
+    crop = reference[
+        extra - margin : extra - margin + direct.shape[0],
+        extra - margin : extra - margin + direct.shape[1],
+    ]
+
+    # Auto-extend must behave exactly like extending the canvas first; otherwise
+    # the old canvas edge leaks into the mask clean-up.
+    assert np.array_equal(direct, crop)
 
 
 def test_fully_transparent_image_is_untouched() -> None:

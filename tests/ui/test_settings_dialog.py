@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QComboBox, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QComboBox, QGroupBox, QLineEdit, QSpinBox
 from pytestqt.qtbot import QtBot
 
 from stickinator.core.ai.config import HTTP, OPENAI
@@ -75,6 +75,22 @@ def test_saves_the_openai_key(qtbot: QtBot, setup: tuple[AppSettingsStore, dict[
 
     assert keys[OPENAI] == "sk-test"
     assert store.load_ai().provider == "local"
+
+
+def test_ai_tab_uses_two_columns(
+    qtbot: QtBot, setup: tuple[AppSettingsStore, dict[str, str]]
+) -> None:
+    store, _ = setup
+    dialog = SettingsDialog(store)
+    qtbot.addWidget(dialog)
+    dialog.show()
+    qtbot.wait(10)
+
+    panels = {box.title(): box for box in dialog.findChildren(QGroupBox)}
+    assert panels["Local (rembg)"].x() < panels["Generic HTTP endpoint"].x()
+    assert panels["Local (rembg)"].x() < panels["OpenAI-compatible edits"].x()
+    # The taller single-column layout did not fit a laptop screen.
+    assert dialog.height() < dialog.width()
 
 
 def test_warns_when_the_keychain_is_unavailable(

@@ -88,6 +88,11 @@ def run(
     if params.smooth:
         blurred = cv2.GaussianBlur(grown.astype(np.float32), (0, 0), sigma)
         grown = (blurred >= 0.5).astype(np.uint8)
+    if params.outer_outline_only:
+        # Growing can seal a bay whose mouth reached the old canvas edge, turning
+        # it into an interior hole. A single outer outline must stay solid, so
+        # fill whatever the grown mask enclosed.
+        grown = _fill_holes(grown)
     cancel.raise_if_cancelled()
 
     canvas = _composite(image, grown, margin, params)
@@ -114,7 +119,14 @@ def _merge(mask: np.ndarray, params: BorderParams) -> np.ndarray:
 
     radius = max(1, round(params.merge_radius))
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (radius * 2 + 1, radius * 2 + 1))
-    return cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    # Close against transparency, not the canvas edge. OpenCV's morphology border
+    # treats the outside as foreground for the erode pass, so closing a mask that
+    # touches the canvas edge smears the result along that edge. A guard ring
+    # wider than the kernel keeps both passes away from the array boundary.
+    guard = radius + 1
+    padded = np.pad(mask, guard, mode="constant")
+    closed = cv2.morphologyEx(padded, cv2.MORPH_CLOSE, kernel)
+    return closed[guard:-guard, guard:-guard]
 
 
 def _fill_holes(mask: np.ndarray) -> np.ndarray:
